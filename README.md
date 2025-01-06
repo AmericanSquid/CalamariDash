@@ -1,6 +1,6 @@
 # CalamariDash
 
-CalamariDash bridges the gap between Linux-based contest stations and HamDash's real-time scoring platform. Now Linux users can participate fully in club competition tracking alongside their Windows-based fellow contesters.
+CalamariDash bridges the gap between Linux-based contest stations and HamDash's real-time scoring platform. Now Linux users can participate fully in club competition tracking alongside their Windows-based fellow contesters. 
 
 ## Current Status
 This is an alpha release focusing on FLDigi integration. The score calculator feature is currently under development. Future releases will include full support for:
@@ -38,4 +38,7 @@ CalamariDash monitors your logging application's ADIF file for changes. When new
 MIT License
 
 ## Author
-K3AYV - Matt Altman
+K3AYV - Matthew Wagner
+
+## Special Thanks
+A huge shoutout to Scott N3FJP and Chris KB3KCN for allowing me to utilize their API to expand HamDash support to Linux users. Their ongoing support of my amateur radio endeavors, whether through encouragement during contests or sharing their knowledge to help me improve my station, has been invaluable. They've been there since the beginning, and I deeply appreciate their contributions. 
