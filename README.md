@@ -12,7 +12,7 @@ This is an alpha release focusing on FLDigi integration. The score calculator fe
 - Real-time Metrics: Track your QSO counts, multipliers, QSO rate, and more, updated live as you log your contacts.
 - Log File Parsing: Reads and parses your FLDigi ADIF log fiel..
 - Score Calculation: Automatically calculate scores based on logged data, using the ScoreCalculator module.
-- HamDash Integration: Support for Affirmatech's HamDash allows Linux users to complete alongside their Windows-based contesters.
+- HamDash Integration: Support for Affirmatech's HamDash allows Linux users to complete alongside their friends.
 - Electron-based Desktop App: A cross-platform, real-time desktop application built with Electron for easy access to live stats and logs.
 
 ## How It Works
