@@ -1,0 +1,28 @@
+const fs = require('fs');
+const os = require('os');
+const xml2js = require('xml2js');
+const path = require('path');
+
+async function getLogPathFromFldigiConfig(configPath = path.join(os.homedir(), '.fldigi', 'fldigi_def.xml')) {
+    try {
+        const xmlContent = fs.readFileSync(configPath, 'utf8');
+        const parser = new xml2js.Parser();
+        const result = await new Promise((resolve, reject) => {
+            parser.parseString(xmlContent, (err, result) => {
+                if (err) reject(err);
+                else resolve(result);
+            });
+        });
+
+        const logPath = result?.FldigiSettings?.LOGBOOKFILENAME?.[0] || null;
+        return logPath || path.join(os.homedir(), '.fldigi', 'logs', 'ARRLRTTYRU.adif');
+    } catch (error) {
+        console.error('Failed to load FLDigi config:', error.message);
+        return path.join(os.homedir(), '.fldigi', 'logs', 'ARRLRTTYRU.adif'); // Default fallback
+    }
+}
+
+(async () => {
+    const logPath = await getLogPathFromFldigiConfig();
+    console.log('Auto-detected log path:', logPath);
+})();
