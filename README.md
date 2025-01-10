@@ -8,6 +8,13 @@ This is an alpha release focusing on FLDigi integration. The score calculator fe
 - WSJT-X 
 - CQRLog
 
+## Features
+- Real-time Metrics: Track your QSO counts, multipliers, QSO rate, and more, updated live as you log your contacts.
+- Log File Parsing: Reads and parses your FLDigi ADIF log fiel..
+- Score Calculation: Automatically calculate scores based on logged data, using the ScoreCalculator module.
+- HamDash Integration: Support for Affirmatech's HamDash allows Linux users to complete alongside their Windows-based contesters.
+- Electron-based Desktop App: A cross-platform, real-time desktop application built with Electron for easy access to live stats and logs.
+
 ## How It Works
 CalamariDash monitors your logging application's ADIF file for changes. When new QSOs are detected, it:
 1. Parses the ADIF data
@@ -15,19 +22,13 @@ CalamariDash monitors your logging application's ADIF file for changes. When new
 3. Uploads results to HamDash
 4. Provides real-time status updates
 
-## Upcoming Features
-- Graphical user interface for configuration and monitoring
-- Live status display showing upload success/failures
-- Real-time QSO rate tracking
-- Easy configuration editing through UI
-- Support for multiple logging applications
-- Enhanced multiplier tracking
-
 ## Building and Running
 1. Clone this repository
 2. Copy `.env.example` to `.env` and configure settings
 3. Install dependencies: `npm install`
-4. Start tracking: `npm start` or `npm run dev`
+4. To package the app for production: `npm run build`
+5. To start the app in development mode: `npm start`
+6. To run the app without the UI: `npm run dev`
 
 ## Requirements
 - Node.js v16 or higher
