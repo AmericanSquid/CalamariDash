@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CalamariDash: RTTY Edition</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    body {
+      background: linear-gradient(to bottom, #3a2a61, #6a4c93);
+      color: #fff;
+    }
+
+    .navbar {
+      background-color: #582c7f;
+    }
+
+    .navbar-brand, .nav-link {
+      color: #fff !important;
+    }
+
+    .navbar-nav .nav-link:hover {
+      color: #c3a1d6 !important;
+    }
+
+    .card {
+      background: #503060;
+      border: none;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.4);
+      color: #f1d1ff;
+    }
+
+    .card-title {
+      color: #c3a1d6;
+    }
+
+    .btn-primary {
+      background-color: #c3a1d6;
+      border-color: #c3a1d6;
+    }
+
+    .btn-primary:hover {
+      background-color: #582c7f;
+    }
+
+    footer {
+      background-color: #582c7f;
+      color: #fff;
+    }
+
+    h1, h3 {
+      color: #c3a1d6;
+    }
+    
+    .list-group-item {
+      background-color: #503060;
+      color: #fff;
+      border: none;
+    }
+    
+    .list-group-item:hover {
+      background-color: #7a4b98;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-lg navbar-dark">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="#">CalamariDash</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav">
+          <li class="nav-item"><a class="nav-link active" href="#">Home</a></li>
+          <li class="nav-item"><a class="nav-link" href="#metrics">Metrics</a></li>
+          <li class="nav-item"><a class="nav-link" href="#" data-bs-toggle="modal" data-bs-target="#configModal">Settings</a></li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <div class="container mt-5">
+    <h1 class="display-4 text-center">CalamariDigi</h1>
+    <p class="lead text-center">Real-Time RTTY Contest Metrics on Linux, Powered by HamDash!</p>
+
+    <!-- Metrics Section -->
+    <div class="row mt-5" id="metrics">
+      <div class="col-md-3">
+        <div class="card text-center">
+          <div class="card-body">
+            <h5 class="card-title"><i class="bi bi-radio"></i> Total QSOs</h5>
+            <p class="card-text"><span id="totalQsos">--</span></p>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card text-center">
+          <div class="card-body">
+            <h5 class="card-title"><i class="bi bi-star"></i> Total Multipliers</h5>
+            <p class="card-text"><span id="totalMultipliers">--</span></p>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card text-center">
+          <div class="card-body">
+            <h5 class="card-title"><i class="bi bi-speedometer"></i> QSO Rate (20 min)</h5>
+            <p class="card-text"><span id="qsoRate20">--</span></p>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card text-center">
+          <div class="card-body">
+            <h5 class="card-title"><i class="bi bi-clock"></i> QSO Rate (60 min)</h5>
+            <p class="card-text"><span id="qsoRate60">--</span></p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Log Display -->
+    <div id="logDisplay" class="mt-5">
+      <h3>Last QSO</h3>
+      <ul id="logList" class="list-group"></ul>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="text-center py-3 mt-5">
+    <p>© 2025 American Squid | K3AYV</p>
+    <p>Stay Neon, Stay Competitive!</p>
+  </footer>
+
+  <!-- Settings Modal -->
+  <div class="modal fade" id="configModal" tabindex="-1" aria-labelledby="configModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="configModalLabel">Settings</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <form id="configForm">
+            <div class="mb-3">
+              <label for="name" class="form-label">Operator Name</label>
+              <input type="text" class="form-control" id="name" placeholder="Enter your name">
+            </div>
+            <div class="mb-3">
+              <label for="callsign" class="form-label">Call Sign</label>
+              <input type="text" class="form-control" id="callsign" placeholder="Enter your call sign">
+            </div>
+            <div class="mb-3">
+              <label for="contest" class="form-label">Contest</label>
+              <select class="form-select" id="contest">
+                <option value="CQ-WPX-SSB">CQ-WPX-SSB</option>
+                <option value="ARRL-RTTY">ARRL-RTTY</option>
+                <option value="CQ-WW-DX">CQ-WW-DX</option>
+              </select>
+            </div>
+            <button type="button" class="btn btn-primary w-100" id="saveConfigBtn">Save Configuration</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
