@@ -83,7 +83,8 @@ def create_app(settings: Settings | None = None) -> Flask:
                 update_source(name, adapter.read(), delta)
             except Exception:
                 pass
-            watcher = PollingWatcher(adapter.read, lambda qsos, n=name, d=delta: update_source(n, qsos, d))
+            watcher = PollingWatcher(adapter.read, lambda qsos, n=name, d=delta: update_source(n, qsos, d),
+                                     interval=15 if name == "wavelog" else 2)
             watcher.start()
             runtime["watchers"].append(watcher)
         app.extensions["watchers"] = runtime["watchers"]
@@ -101,7 +102,13 @@ def create_app(settings: Settings | None = None) -> Flask:
 
     @app.get("/api/health")
     def health():
-        return jsonify({"status": "ok", "sources": len(runtime["adapters"]), "last_upload": state["last_upload"]})
+        source_status = []
+        for adapter in runtime["adapters"]:
+            source_status.append({"source": getattr(adapter, "source_name", adapter.__class__.__name__),
+                                  "last_error": getattr(adapter, "last_error", None),
+                                  "path": getattr(adapter, "api_url", getattr(adapter, "path", None))})
+        return jsonify({"status": "ok", "sources": len(runtime["adapters"]), "last_upload": state["last_upload"],
+                       "source_status": source_status})
 
     @app.route("/api/settings", methods=["GET", "POST"])
     def settings_api():

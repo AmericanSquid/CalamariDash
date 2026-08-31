@@ -2,6 +2,7 @@ import json
 import threading
 import urllib.request
 from datetime import datetime
+from urllib.parse import urlsplit, urlunsplit
 from pathlib import Path
 from typing import Callable
 
@@ -32,8 +33,15 @@ class WavelogAdapter:
     """Read-only delta reader for Wavelog's get_contacts_adif endpoint."""
     def __init__(self, url: str, api_key: str, station_id: str, state_path: str):
         self.url, self.api_key, self.station_id, self.state_path = url.rstrip("/"), api_key, station_id, Path(state_path)
+        self.last_error = None
+        parts = urlsplit(self.url)
+        path = parts.path.rstrip("/")
+        if not path.endswith("/index.php"):
+            path += "/index.php"
+        self.api_url = urlunsplit((parts.scheme, parts.netloc, path + "/api/get_contacts_adif", "", ""))
 
     def read(self) -> list[QSO]:
+        self.last_error = None
         last_id = 0
         cached: dict[str, QSO] = {}
         if self.state_path.exists():
@@ -46,12 +54,13 @@ class WavelogAdapter:
             except (ValueError, OSError):
                 pass
         payload = json.dumps({"key": self.api_key, "station_id": self.station_id, "fetchfromid": last_id}).encode()
-        request = urllib.request.Request(self.url + "/api/get_contacts_adif", data=payload,
+        request = urllib.request.Request(self.api_url, data=payload,
                                           headers={"Content-Type": "application/json", "Accept": "application/json"})
         try:
             with urllib.request.urlopen(request, timeout=15) as response:
                 data = json.load(response)
         except Exception:
+            self.last_error = "Wavelog request failed"
             return list(cached.values())
         new_id = data.get("lastfetchedid", last_id)
         for qso in parse_adif(data.get("adif", ""), "wavelog"):

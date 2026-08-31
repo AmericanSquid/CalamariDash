@@ -43,7 +43,7 @@ def test_wavelog_adapter_reads_delta_and_persists_cursor(tmp_path, monkeypatch):
         def read(self): return b""
 
     def fake_urlopen(request, timeout):
-        assert request.full_url.endswith("/api/get_contacts_adif")
+        assert request.full_url.endswith("/index.php/api/get_contacts_adif")
         assert request.data and b"fetchfromid" in request.data
         return Response()
 
