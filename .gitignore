@@ -3,4 +3,5 @@
 __pycache__/
 .pytest_cache/
 calamaridash-settings.json
+calamaridash-session.json
 wavelog-state.json

@@ -18,12 +18,13 @@ class Settings:
     wavelog_api_key: str = os.getenv("WAVELOG_API_KEY", "")
     wavelog_station_id: str = os.getenv("WAVELOG_STATION_ID", "")
     wavelog_state_path: str = os.getenv("WAVELOG_STATE_PATH", "wavelog-state.json")
-    contest: str = os.getenv("CONTEST", "TEST")
+    contest: str = os.getenv("CONTEST", "ARRL-RTTY")
     operator_callsign: str = os.getenv("OPERATOR_CALLSIGN", "K3AYV")
     operator_name: str = os.getenv("OPERATOR_NAME", "Matt")
     club_name: str = os.getenv("CLUB_NAME", "Northeast Maryland Amateur Radio Contest Society")
     profile: str = os.getenv("SCORING_PROFILE", "arrl_rtty_roundup")
     settings_path: str = os.getenv("CALAMARIDASH_SETTINGS_PATH", "calamaridash-settings.json")
+    session_path: str = os.getenv("CALAMARIDASH_SESSION_PATH", "calamaridash-session.json")
 
     @classmethod
     def load(cls):
@@ -37,6 +38,10 @@ class Settings:
             return defaults
         allowed = {field.name for field in fields(cls)}
         values = {**asdict(defaults), **{key: value for key, value in saved.items() if key in allowed}}
+        if str(values["contest"]).upper() == "ARRL-RTTY":
+            values["profile"] = "arrl_rtty_roundup"
+        elif values["profile"] == "arrl_rtty_roundup":
+            values["profile"] = "generic"
         return cls(**values)
 
     def updated(self, values: dict):
@@ -49,6 +54,10 @@ class Settings:
             if key in {"hamdash_api_key", "wavelog_api_key"} and not value:
                 continue
             merged[key] = value
+        if merged["contest"].upper() == "ARRL-RTTY":
+            merged["profile"] = "arrl_rtty_roundup"
+        elif merged["profile"] == "arrl_rtty_roundup":
+            merged["profile"] = "generic"
         return Settings(**merged)
 
     def save(self):
@@ -56,6 +65,10 @@ class Settings:
 
     def public(self) -> dict:
         data = asdict(self)
+        if str(data["contest"]).upper() == "ARRL-RTTY":
+            data["profile"] = "arrl_rtty_roundup"
+        elif data["profile"] == "arrl_rtty_roundup":
+            data["profile"] = "generic"
         data.pop("hamdash_api_key")
         data.pop("wavelog_api_key")
         data["hamdash_api_key_set"] = bool(self.hamdash_api_key)

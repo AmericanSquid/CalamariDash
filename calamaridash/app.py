@@ -6,22 +6,43 @@ from flask import Flask, jsonify, render_template, request
 
 from .adapters import FLDigiAdapter, PollingWatcher, WavelogAdapter, WSJTXAdapter
 from .config import Settings
+from .contests import CONTESTS
 from .hamdash import HamDashClient
+from .session import ContestSession
 from .scoring import PROFILES, calculate
 
 
 def create_app(settings: Settings | None = None) -> Flask:
     app = Flask(__name__)
-    runtime = {"settings": settings or Settings.load(), "adapters": [], "watchers": [], "hamdash": None}
+    initial_settings = settings or Settings.load()
+    runtime = {"settings": initial_settings, "session": ContestSession.load(initial_settings.session_path,
+                                                                            initial_settings.contest),
+               "adapters": [], "watchers": [], "hamdash": None}
     state = {"source_qsos": {}, "qsos": [], "payload": {}, "last_upload": None}
     lock = Lock()
 
-    def recompute_and_upload():
+    def selected_profile(current):
+        # The contest identifier is authoritative.  This prevents an ARRL
+        # RTTY profile from accidentally being used for a phone contest.
+        if current.contest.upper() == "ARRL-RTTY":
+            return PROFILES["arrl_rtty_roundup"]
+        return PROFILES["generic"]
+
+    def recompute_and_upload(upload=True):
         current = runtime["settings"]
-        profile = PROFILES.get(current.profile, PROFILES["generic"])
+        profile = selected_profile(current)
         all_qsos = {q.dedupe_key: q for qsos in state["source_qsos"].values() for q in qsos}
-        state["qsos"] = sorted(all_qsos.values(), key=lambda q: q.timestamp)
-        metrics = calculate(state["qsos"], profile)
+        session = runtime["session"]
+        if not session.active:
+            state["qsos"] = []
+        elif session.qso_started_at:
+            start = datetime.fromisoformat(session.qso_started_at)
+            state["qsos"] = sorted((q for q in all_qsos.values() if q.timestamp >= start), key=lambda q: q.timestamp)
+        else:
+            state["qsos"] = sorted(all_qsos.values(), key=lambda q: q.timestamp)
+        timer_was_used = bool(session.qso_started_at or session.timer_running_since or session.elapsed_before_run)
+        elapsed = session.elapsed_seconds() if timer_was_used else None
+        metrics = calculate(state["qsos"], profile, operating_seconds=elapsed)
         last = metrics.pop("lastQso")
         payload = {
             "contest": current.contest,
@@ -47,9 +68,11 @@ def create_app(settings: Settings | None = None) -> Flask:
             "firstQsoDate": state["qsos"][0].timestamp.isoformat() if state["qsos"] else None,
             "lastQso": last,
         }
-        state["payload"] = {**metrics, "lastQso": last, "contest": current.contest}
+        state["payload"] = {**metrics, "lastQso": last, "contest": current.contest,
+                             "score_warning": None if metrics["score_exact"] else
+                             "Generic metrics only; official rules for this contest are not implemented."}
         runtime["hamdash"] = HamDashClient(current.hamdash_url, current.hamdash_api_key)
-        if runtime["hamdash"].upload(payload):
+        if upload and runtime["hamdash"].upload(payload):
             state["last_upload"] = datetime.now().isoformat()
 
     def update_source(name, qsos, delta=False):
@@ -101,6 +124,37 @@ def create_app(settings: Settings | None = None) -> Flask:
         with lock:
             return jsonify(state["payload"])
 
+    @app.get("/api/session")
+    def session_status():
+        return jsonify(runtime["session"].public())
+
+    @app.post("/api/session/start")
+    def session_start():
+        current = runtime["settings"]
+        runtime["session"].start(current.contest)
+        with lock:
+            recompute_and_upload()
+        return jsonify(runtime["session"].public())
+
+    @app.post("/api/session/stop")
+    def session_stop():
+        runtime["session"].stop()
+        with lock:
+            recompute_and_upload()
+        return jsonify(runtime["session"].public())
+
+    @app.post("/api/session/end")
+    def session_end():
+        runtime["session"].end()
+        with lock:
+            state["source_qsos"] = {}
+            recompute_and_upload(upload=False)
+        return jsonify(runtime["session"].public())
+
+    @app.get("/api/contests")
+    def contests():
+        return jsonify([{"code": code, "name": name} for code, name in CONTESTS])
+
     @app.get("/api/health")
     def health():
         source_status = []
@@ -114,7 +168,8 @@ def create_app(settings: Settings | None = None) -> Flask:
         hamdash_error = runtime["hamdash"].last_error if runtime["hamdash"] else None
         return jsonify({"status": "degraded" if has_source_error or hamdash_error else "ok", "sources": len(runtime["adapters"]),
                        "last_upload": state["last_upload"], "hamdash_error": hamdash_error,
-                       "source_status": source_status})
+                       "score_warning": state["payload"].get("score_warning"),
+                       "session": runtime["session"].public(), "source_status": source_status})
 
     @app.route("/api/settings", methods=["GET", "POST"])
     def settings_api():
@@ -125,8 +180,13 @@ def create_app(settings: Settings | None = None) -> Flask:
             return jsonify({"error": "Settings must be JSON."}), 400
         try:
             updated = runtime["settings"].updated(data)
+            if (updated.contest != runtime["settings"].contest and runtime["session"].active
+                    and state["qsos"]):
+                return jsonify({"error": "End the current contest before changing its contest identifier."}), 409
             updated.save()
             runtime["settings"] = updated
+            runtime["session"].contest = updated.contest
+            runtime["session"].save()
             configure_sources()
         except OSError as error:
             return jsonify({"error": f"Could not save settings: {error}"}), 500

@@ -90,6 +90,22 @@ def test_score_and_rate():
     assert metrics["rate20"] == 6.0
 
 
+def test_arrl_rtty_roundup_score_deduplicates_by_call_and_band():
+    def qso(call, minute, band, state="", dxcc="", source="fixture"):
+        return QSO(call, datetime(2025, 1, 10, 12, minute, tzinfo=timezone.utc), band=band,
+                   mode="RTTY", state=state, dxcc=dxcc, source_id=f"{source}-{call}-{minute}")
+
+    qsos = [qso("K3ABC", 0, "20m", state="MD"), qso("K3ABC", 1, "20m", state="MD"),
+            qso("N0XYZ", 2, "40m", state="VA"), qso("F4ABC", 3, "20m", dxcc="227")]
+    metrics = calculate(qsos, PROFILES["arrl_rtty_roundup"], operating_seconds=5400)
+    assert metrics["totalQsos"] == 3
+    assert metrics["totalQsoPoints"] == 3
+    assert metrics["multiplierCount"] == 3
+    assert metrics["score"] == 9
+    assert metrics["totalOpTime"] == "01:30:00"
+    assert metrics["score_exact"] is True
+
+
 def test_flask_metrics_endpoint():
     from calamaridash.app import create_app
     app = create_app()
@@ -122,3 +138,27 @@ def test_settings_api_persists_local_configuration(tmp_path):
     saved = json.loads(path.read_text())
     assert saved["wavelog_station_id"] == "42"
     assert saved["wavelog_api_key"] == "read-only-key"
+
+
+def test_contest_selector_and_session_lifecycle(tmp_path):
+    from calamaridash.app import create_app
+    from calamaridash.config import Settings
+
+    app = create_app(Settings(settings_path=str(tmp_path / "settings.json"),
+                              session_path=str(tmp_path / "session.json")))
+    client = app.test_client()
+    contests = client.get("/api/contests").json
+    assert {contest["code"] for contest in contests} >= {"ARRL-RTTY", "CQ-WPX-SSB"}
+
+    assert client.post("/api/session/end").json["active"] is False
+    started = client.post("/api/session/start").json
+    assert started["active"] is True
+    assert started["qso_started_at"]
+    stopped = client.post("/api/session/stop").json
+    assert stopped["timer_running"] is False
+    assert stopped["elapsed_seconds"] >= 0
+
+    response = client.post("/api/settings", json={"contest": "CQ-WPX-SSB"})
+    assert response.status_code == 200
+    assert response.json["contest"] == "CQ-WPX-SSB"
+    assert response.json["profile"] == "generic"
