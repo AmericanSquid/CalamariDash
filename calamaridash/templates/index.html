@@ -1,1 +1,40 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CalamariDash</title><style>body{font:16px system-ui;margin:2rem;background:#20152b;color:#fff}main{max-width:1000px;margin:auto}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1rem}.card{background:#402b52;padding:1rem;border-radius:10px}.value{font-size:2rem;color:#e8c7ff}table{width:100%;margin-top:2rem;background:#30203d;border-radius:10px;padding:1rem}td,th{text-align:left;padding:.5rem}</style></head><body><main><h1>CalamariDash</h1><p>Local contest telemetry and HamDash bridge</p><section class="grid"><div class="card">QSOs<div class="value" id="totalQsos">—</div></div><div class="card">Multipliers<div class="value" id="multiplierCount">—</div></div><div class="card">Score<div class="value" id="score">—</div></div><div class="card">Rate / 20 min<div class="value" id="rate20">—</div></div><div class="card">Rate / 60 min<div class="value" id="rate60">—</div></div><div class="card">Operating time<div class="value" id="totalOpTime">—</div></div></section><h2>Latest QSO</h2><table><tbody id="lastQso"><tr><td>No QSOs received yet.</td></tr></tbody></table></main><script>async function update(){const r=await fetch('/api/metrics');const m=await r.json();for(const k of ['totalQsos','multiplierCount','score','rate20','rate60','totalOpTime'])document.getElementById(k).textContent=m[k]??'—';const q=m.lastQso;document.getElementById('lastQso').innerHTML=q?Object.entries(q).map(([k,v])=>`<tr><th>${k}</th><td>${v??''}</td></tr>`).join(''):'<tr><td>No QSOs received yet.</td></tr>'}update();setInterval(update,2000)</script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>CalamariDash</title>
+  <style>
+    body{font:16px system-ui;margin:2rem;background:#20152b;color:#fff}main{max-width:1000px;margin:auto}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1rem}.card,form,table{background:#402b52;padding:1rem;border-radius:10px}.value{font-size:2rem;color:#e8c7ff}table{width:100%;margin-top:1rem}td,th{text-align:left;padding:.5rem}.toolbar{display:flex;gap:1rem;align-items:center;margin:1rem 0}button{background:#e8c7ff;color:#20152b;border:0;border-radius:6px;padding:.6rem 1rem;font-weight:bold}input,select{width:100%;box-sizing:border-box;padding:.45rem;margin:.25rem 0 1rem}label{display:block}.settings{display:none;margin-top:1rem}.settings.open{display:block}.columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem}.status{min-height:1.3rem;color:#e8c7ff}
+  </style>
+</head>
+<body>
+<main>
+  <h1>CalamariDash</h1>
+  <p>Local contest telemetry and HamDash bridge</p>
+  <div class="toolbar"><button id="settingsButton" type="button">Settings</button><span id="status" class="status"></span></div>
+  <section class="grid">
+    <div class="card">QSOs<div class="value" id="totalQsos">—</div></div><div class="card">Multipliers<div class="value" id="multiplierCount">—</div></div><div class="card">Score<div class="value" id="score">—</div></div><div class="card">Rate / 20 min<div class="value" id="rate20">—</div></div><div class="card">Rate / 60 min<div class="value" id="rate60">—</div></div><div class="card">Operating time<div class="value" id="totalOpTime">—</div></div>
+  </section>
+  <section id="settings" class="settings">
+    <h2>Station settings</h2>
+    <p>Saved locally in <code>calamaridash-settings.json</code>. Leave an API-key field blank to retain its current value.</p>
+    <form id="settingsForm"><div class="columns">
+      <div><label>Operator callsign<input name="operator_callsign" required></label><label>Operator name<input name="operator_name"></label><label>Club name<input name="club_name"></label><label>Contest identifier<input name="contest" required></label><label>Scoring profile<select name="profile"><option value="arrl_rtty_roundup">ARRL RTTY Roundup</option><option value="generic">Generic contest</option></select></label></div>
+      <div><label>HamDash API URL<input name="hamdash_url" required></label><label>HamDash API key<input type="password" name="hamdash_api_key" autocomplete="new-password"></label><label>FLDigi ADIF log path<input name="fldigi_log_path"></label><label>WSJT-X ADIF log path<input name="wsjtx_log_path"></label></div>
+      <div><label>Wavelog URL<input name="wavelog_url" placeholder="https://log.example.com/index.php"></label><label>Wavelog read-only API key<input type="password" name="wavelog_api_key" autocomplete="new-password"></label><label>Wavelog station profile ID<input name="wavelog_station_id"></label><label>Wavelog cursor file<input name="wavelog_state_path"></label></div>
+    </div><button type="submit">Save and apply</button></form>
+  </section>
+  <h2>Latest QSO</h2><table><tbody id="lastQso"><tr><td>No QSOs received yet.</td></tr></tbody></table>
+</main>
+<script>
+  const fields=['totalQsos','multiplierCount','score','rate20','rate60','totalOpTime']; const status=document.getElementById('status'); const settings=document.getElementById('settings');
+  function qsoRows(q){const body=document.getElementById('lastQso'); body.replaceChildren(); if(!q){body.innerHTML='<tr><td>No QSOs received yet.</td></tr>';return} for(const [key,value] of Object.entries(q)){const row=document.createElement('tr'),head=document.createElement('th'),cell=document.createElement('td');head.textContent=key;cell.textContent=value??'';row.append(head,cell);body.append(row)}}
+  async function update(){try{const r=await fetch('/api/metrics');if(!r.ok)throw Error('Metrics request failed');const m=await r.json();for(const k of fields)document.getElementById(k).textContent=m[k]??'—';qsoRows(m.lastQso);status.textContent=''}catch(error){status.textContent='Dashboard connection error: '+error.message}}
+  async function loadSettings(){const r=await fetch('/api/settings');const data=await r.json();for(const [key,value] of Object.entries(data)){const field=document.querySelector(`[name="${key}"]`);if(field)field.value=value??''}for(const key of ['hamdash_api_key','wavelog_api_key']){const field=document.querySelector(`[name="${key}"]`);if(data[`${key}_set`])field.placeholder='Configured — leave blank to keep'}}
+  document.getElementById('settingsButton').addEventListener('click',async()=>{settings.classList.toggle('open');if(settings.classList.contains('open'))await loadSettings()});
+  document.getElementById('settingsForm').addEventListener('submit',async event=>{event.preventDefault();const payload=Object.fromEntries(new FormData(event.target));const r=await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const data=await r.json();status.textContent=r.ok?'Settings saved and sources restarted.':data.error||'Could not save settings.';if(r.ok)settings.classList.remove('open')});
+  update();setInterval(update,2000);
+</script>
+</body>
+</html>

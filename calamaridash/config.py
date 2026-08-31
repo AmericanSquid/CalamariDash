@@ -1,5 +1,7 @@
+import json
 import os
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, fields
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -8,8 +10,6 @@ load_dotenv()
 
 @dataclass
 class Settings:
-    # The live HamDash service is hosted on .com; the developer page currently
-    # documents a .net hostname that does not resolve in deployed environments.
     hamdash_url: str = os.getenv("HAMDASH_API_URL", "https://hamdash.affirmatech.com/api/standing")
     hamdash_api_key: str = os.getenv("API_KEY", "")
     fldigi_log_path: str = os.getenv("FLDIGI_LOG_PATH", "")
@@ -23,3 +23,41 @@ class Settings:
     operator_name: str = os.getenv("OPERATOR_NAME", "Matt")
     club_name: str = os.getenv("CLUB_NAME", "Northeast Maryland Amateur Radio Contest Society")
     profile: str = os.getenv("SCORING_PROFILE", "arrl_rtty_roundup")
+    settings_path: str = os.getenv("CALAMARIDASH_SETTINGS_PATH", "calamaridash-settings.json")
+
+    @classmethod
+    def load(cls):
+        defaults = cls()
+        path = Path(defaults.settings_path)
+        if not path.exists():
+            return defaults
+        try:
+            saved = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return defaults
+        allowed = {field.name for field in fields(cls)}
+        values = {**asdict(defaults), **{key: value for key, value in saved.items() if key in allowed}}
+        return cls(**values)
+
+    def updated(self, values: dict):
+        allowed = {field.name for field in fields(self)} - {"settings_path"}
+        merged = asdict(self)
+        for key in allowed:
+            if key not in values:
+                continue
+            value = str(values[key]).strip()
+            if key in {"hamdash_api_key", "wavelog_api_key"} and not value:
+                continue
+            merged[key] = value
+        return Settings(**merged)
+
+    def save(self):
+        Path(self.settings_path).write_text(json.dumps(asdict(self), indent=2) + "\n", encoding="utf-8")
+
+    def public(self) -> dict:
+        data = asdict(self)
+        data.pop("hamdash_api_key")
+        data.pop("wavelog_api_key")
+        data["hamdash_api_key_set"] = bool(self.hamdash_api_key)
+        data["wavelog_api_key_set"] = bool(self.wavelog_api_key)
+        return data

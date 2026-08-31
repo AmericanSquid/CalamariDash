@@ -78,3 +78,24 @@ def test_flask_metrics_endpoint():
 def test_default_hamdash_endpoint_uses_live_host():
     from calamaridash.config import Settings
     assert Settings().hamdash_url == "https://hamdash.affirmatech.com/api/standing"
+
+
+def test_settings_api_persists_local_configuration(tmp_path):
+    from calamaridash.app import create_app
+    from calamaridash.config import Settings
+
+    path = tmp_path / "settings.json"
+    app = create_app(Settings(settings_path=str(path)))
+    client = app.test_client()
+    response = client.post("/api/settings", json={
+        "operator_callsign": "N0CALL",
+        "wavelog_url": "https://log.example.com/index.php",
+        "wavelog_station_id": "42",
+        "wavelog_api_key": "read-only-key",
+    })
+    assert response.status_code == 200
+    assert response.json["operator_callsign"] == "N0CALL"
+    assert response.json["wavelog_api_key_set"] is True
+    saved = json.loads(path.read_text())
+    assert saved["wavelog_station_id"] == "42"
+    assert saved["wavelog_api_key"] == "read-only-key"
