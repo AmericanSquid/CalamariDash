@@ -1,6 +1,7 @@
 import json
 import threading
 import urllib.request
+from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
@@ -34,19 +35,32 @@ class WavelogAdapter:
 
     def read(self) -> list[QSO]:
         last_id = 0
+        cached: dict[str, QSO] = {}
         if self.state_path.exists():
             try:
-                last_id = json.loads(self.state_path.read_text()).get("lastfetchedid", 0)
+                saved = json.loads(self.state_path.read_text())
+                last_id = saved.get("lastfetchedid", 0)
+                for item in saved.get("qsos", []):
+                    item["timestamp"] = datetime.fromisoformat(item["timestamp"])
+                    cached[item["source_id"]] = QSO(**item)
             except (ValueError, OSError):
                 pass
         payload = json.dumps({"key": self.api_key, "station_id": self.station_id, "fetchfromid": last_id}).encode()
         request = urllib.request.Request(self.url + "/api/get_contacts_adif", data=payload,
                                           headers={"Content-Type": "application/json", "Accept": "application/json"})
-        with urllib.request.urlopen(request, timeout=15) as response:
-            data = json.load(response)
+        try:
+            with urllib.request.urlopen(request, timeout=15) as response:
+                data = json.load(response)
+        except Exception:
+            return list(cached.values())
         new_id = data.get("lastfetchedid", last_id)
-        self.state_path.write_text(json.dumps({"lastfetchedid": new_id}))
-        return parse_adif(data.get("adif", ""), "wavelog")
+        for qso in parse_adif(data.get("adif", ""), "wavelog"):
+            cached[qso.dedupe_key] = qso
+        self.state_path.write_text(json.dumps({
+            "lastfetchedid": new_id,
+            "qsos": [{**qso.__dict__, "timestamp": qso.timestamp.isoformat(), "raw": {}} for qso in cached.values()],
+        }))
+        return list(cached.values())
 
 
 class PollingWatcher:
@@ -74,4 +88,3 @@ class PollingWatcher:
             except Exception:
                 pass
             self._stop.wait(self.interval)
-

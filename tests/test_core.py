@@ -56,6 +56,8 @@ def test_wavelog_adapter_reads_delta_and_persists_cursor(tmp_path, monkeypatch):
     qsos = WavelogAdapter("https://wavelog.local", "secret", "1", str(state_path)).read()
     assert len(qsos) == 2
     assert json.loads(state_path.read_text())["lastfetchedid"] == 17
+    restored = WavelogAdapter("https://wavelog.local", "secret", "1", str(state_path)).read()
+    assert len(restored) == 2
 
 
 def test_score_and_rate():
