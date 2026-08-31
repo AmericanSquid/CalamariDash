@@ -4,7 +4,9 @@ from dataclasses import dataclass
 
 @dataclass
 class Settings:
-    hamdash_url: str = os.getenv("HAMDASH_API_URL", "https://hamdash.affirmatech.net/api/standing")
+    # The live HamDash service is hosted on .com; the developer page currently
+    # documents a .net hostname that does not resolve in deployed environments.
+    hamdash_url: str = os.getenv("HAMDASH_API_URL", "https://hamdash.affirmatech.com/api/standing")
     hamdash_api_key: str = os.getenv("API_KEY", "")
     fldigi_log_path: str = os.getenv("FLDIGI_LOG_PATH", "")
     wsjtx_log_path: str = os.getenv("WSJTX_LOG_PATH", "")
@@ -17,4 +19,3 @@ class Settings:
     operator_name: str = os.getenv("OPERATOR_NAME", "Matt")
     club_name: str = os.getenv("CLUB_NAME", "Northeast Maryland Amateur Radio Contest Society")
     profile: str = os.getenv("SCORING_PROFILE", "arrl_rtty_roundup")
-

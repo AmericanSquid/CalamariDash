@@ -73,3 +73,8 @@ def test_flask_metrics_endpoint():
     response = app.test_client().get("/api/health")
     assert response.status_code == 200
     assert response.json["status"] == "ok"
+
+
+def test_default_hamdash_endpoint_uses_live_host():
+    from calamaridash.config import Settings
+    assert Settings().hamdash_url == "https://hamdash.affirmatech.com/api/standing"
