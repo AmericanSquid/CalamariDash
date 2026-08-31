@@ -26,6 +26,12 @@ class Settings:
     settings_path: str = os.getenv("CALAMARIDASH_SETTINGS_PATH", "calamaridash-settings.json")
     session_path: str = os.getenv("CALAMARIDASH_SESSION_PATH", "calamaridash-session.json")
     custom_profiles: dict = field(default_factory=dict)
+    station_dxcc: str = os.getenv("STATION_DXCC", "291")
+    station_continent: str = os.getenv("STATION_CONTINENT", "NA")
+    station_country: str = os.getenv("STATION_COUNTRY", "USA")
+    station_gridsquare: str = os.getenv("STATION_GRIDSQUARE", "")
+    field_day_power_multiplier: str = os.getenv("FIELD_DAY_POWER_MULTIPLIER", "2")
+    field_day_bonus_points: str = os.getenv("FIELD_DAY_BONUS_POINTS", "0")
 
     @classmethod
     def load(cls):

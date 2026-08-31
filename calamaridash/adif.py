@@ -59,7 +59,8 @@ def _to_qso(fields: dict[str, str], source: str, index: int) -> QSO:
         gridsquare=fields.get("GRIDSQUARE", ""),
         exchange=fields.get("STX_STRING") or fields.get("SRX_STRING", ""),
         source_id=f"{source}:{fields.get('QSO_DATE','')}:{fields.get('TIME_OFF', fields.get('TIME_ON',''))}:{fields['CALL']}:{index}",
-        raw=fields,
+        raw=fields, continent=fields.get("CONTINENT", ""),
+        cq_zone=fields.get("CQZ") or fields.get("CQ_ZONE", ""),
     )
 
 

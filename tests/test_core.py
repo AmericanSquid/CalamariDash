@@ -191,6 +191,29 @@ def test_contest_selector_and_session_lifecycle(tmp_path):
     assert response.json["profile"] == "generic"
 
 
+def test_builtin_contests_select_distinct_scoring_profiles(tmp_path):
+    from calamaridash.app import create_app
+    from calamaridash.config import Settings
+
+    app = create_app(Settings(settings_path=str(tmp_path / "settings.json"),
+                              session_path=str(tmp_path / "session.json")))
+    client = app.test_client()
+    expected = {"ARRL-10": "ARRL 10-Meter Contest", "ARRL-FD": "ARRL Field Day",
+                "ARRL-DX-SSB": "ARRL International DX Contest (phone)", "CQ-WPX-SSB": "CQ WW WPX Contest (phone)",
+                "CQ-WW-RTTY": "CQ Worldwide RTTY DX Contest (digital)", "CQ-VHF-DIGI": "CQ Worldwide VHF Contest (digital)"}
+    for contest, profile in expected.items():
+        response = client.post("/api/settings", json={"contest": contest})
+        assert response.status_code == 200
+        assert response.json["effective_profile"] == profile
+
+
+def test_every_listed_arrl_cq_contest_has_a_profile():
+    from calamaridash.contests import CONTESTS
+    from calamaridash.scoring import PROFILE_BY_CONTEST, PROFILES
+    assert all(code in PROFILE_BY_CONTEST for code, _ in CONTESTS)
+    assert all(PROFILE_BY_CONTEST[code] in PROFILES for code, _ in CONTESTS)
+
+
 def test_custom_profile_api_persists_and_adds_contest(tmp_path):
     from calamaridash.app import create_app
     from calamaridash.config import Settings

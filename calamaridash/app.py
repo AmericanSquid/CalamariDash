@@ -9,7 +9,7 @@ from .config import Settings
 from .contests import CONTESTS
 from .hamdash import HamDashClient
 from .session import ContestSession
-from .scoring import PROFILES, calculate, custom_profile, validate_custom_profile
+from .scoring import PROFILE_BY_CONTEST, PROFILES, calculate, custom_profile, profile_for_contest, validate_custom_profile
 
 
 def create_app(settings: Settings | None = None) -> Flask:
@@ -24,8 +24,8 @@ def create_app(settings: Settings | None = None) -> Flask:
     def selected_profile(current):
         # The contest identifier is authoritative.  This prevents an ARRL
         # RTTY profile from accidentally being used for a phone contest.
-        if current.contest.upper() == "ARRL-RTTY":
-            return PROFILES["arrl_rtty_roundup"]
+        if current.contest.upper() in PROFILE_BY_CONTEST:
+            return profile_for_contest(current.contest)
         for code, rules in (current.custom_profiles or {}).items():
             if str(code).upper() == current.contest.upper():
                 try:
@@ -49,14 +49,12 @@ def create_app(settings: Settings | None = None) -> Flask:
             state["qsos"] = sorted(all_qsos.values(), key=lambda q: q.timestamp)
         timer_was_used = bool(session.qso_started_at or session.timer_running_since or session.elapsed_before_run)
         elapsed = session.elapsed_seconds() if timer_was_used else None
-        metrics = calculate(state["qsos"], profile, operating_seconds=elapsed)
+        context = {name: getattr(current, name) for name in
+                   ("station_dxcc", "station_continent", "station_country", "station_gridsquare",
+                    "field_day_power_multiplier", "field_day_bonus_points")}
+        metrics = calculate(state["qsos"], profile, operating_seconds=elapsed, context=context)
         last = metrics.pop("lastQso")
-        if metrics["score_exact"]:
-            score_warning = None
-        elif metrics["score_profile"].startswith("Custom:"):
-            score_warning = "Custom scoring profile; verify its rules before treating the score as official."
-        else:
-            score_warning = "Generic metrics only; official rules for this contest are not implemented."
+        score_warning = metrics.pop("score_warning")
         payload = {
             "contest": current.contest,
             "score": metrics["score"],
@@ -168,11 +166,14 @@ def create_app(settings: Settings | None = None) -> Flask:
 
     @app.get("/api/contests")
     def contests():
-        result = [{"code": code, "name": name} for code, name in CONTESTS]
+        result = []
+        for code, name in CONTESTS:
+            result.append({"code": code, "name": name, "profile": profile_for_contest(code).name})
         known = {code.upper() for code, _ in CONTESTS}
         for code, rules in (runtime["settings"].custom_profiles or {}).items():
             if isinstance(rules, dict) and str(code).upper() not in known:
-                result.append({"code": code, "name": rules.get("name", code)})
+                result.append({"code": code, "name": rules.get("name", code),
+                               "profile": f"Custom: {rules.get('name', code)}"})
         return jsonify(result)
 
     @app.post("/api/custom-profile")
@@ -213,7 +214,9 @@ def create_app(settings: Settings | None = None) -> Flask:
     @app.route("/api/settings", methods=["GET", "POST"])
     def settings_api():
         if request.method == "GET":
-            return jsonify(runtime["settings"].public())
+            data = runtime["settings"].public()
+            data["effective_profile"] = selected_profile(runtime["settings"]).name
+            return jsonify(data)
         data = request.get_json(silent=True)
         if not isinstance(data, dict):
             return jsonify({"error": "Settings must be JSON."}), 400
@@ -229,7 +232,9 @@ def create_app(settings: Settings | None = None) -> Flask:
             configure_sources()
         except OSError as error:
             return jsonify({"error": f"Could not save settings: {error}"}), 500
-        return jsonify(runtime["settings"].public())
+        data = runtime["settings"].public()
+        data["effective_profile"] = selected_profile(runtime["settings"]).name
+        return jsonify(data)
 
     return app
 

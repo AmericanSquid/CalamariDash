@@ -18,6 +18,8 @@ class QSO:
     exchange: str = ""
     source_id: str = ""
     raw: dict[str, Any] = field(default_factory=dict, compare=False, repr=False)
+    continent: str = ""
+    cq_zone: str = ""
 
     def __post_init__(self):
         if self.timestamp.tzinfo is None:
@@ -26,4 +28,3 @@ class QSO:
     @property
     def dedupe_key(self) -> str:
         return self.source_id or "|".join((self.callsign.upper(), self.timestamp.isoformat(), self.band, self.mode))
-
