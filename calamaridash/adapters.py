@@ -1,6 +1,7 @@
 import json
 import threading
 import urllib.request
+import urllib.error
 from datetime import datetime
 from urllib.parse import urlsplit, urlunsplit
 from pathlib import Path
@@ -59,8 +60,15 @@ class WavelogAdapter:
         try:
             with urllib.request.urlopen(request, timeout=15) as response:
                 data = json.load(response)
-        except Exception:
-            self.last_error = "Wavelog request failed"
+        except urllib.error.HTTPError as error:
+            detail = error.read().decode("utf-8", errors="replace").strip()
+            self.last_error = f"Wavelog HTTP {error.code}: {detail[:240]}"
+            return list(cached.values())
+        except urllib.error.URLError as error:
+            self.last_error = f"Wavelog connection failed: {error.reason}"
+            return list(cached.values())
+        except Exception as error:
+            self.last_error = f"Wavelog request failed: {type(error).__name__}: {error}"
             return list(cached.values())
         new_id = data.get("lastfetchedid", last_id)
         for qso in parse_adif(data.get("adif", ""), "wavelog"):

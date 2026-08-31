@@ -60,6 +60,16 @@ def test_wavelog_adapter_reads_delta_and_persists_cursor(tmp_path, monkeypatch):
     assert len(restored) == 2
 
 
+def test_wavelog_adapter_reports_http_errors(tmp_path, monkeypatch):
+    from urllib.error import HTTPError
+    def fake_urlopen(request, timeout):
+        raise HTTPError(request.full_url, 401, "Unauthorized", {}, None)
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    adapter = WavelogAdapter("https://wavelog.local", "secret", "1", str(tmp_path / "cursor.json"))
+    assert adapter.read() == []
+    assert adapter.last_error.startswith("Wavelog HTTP 401")
+
+
 def test_score_and_rate():
     qsos = parse_adif(ADIF, "fixture")
     metrics = calculate(qsos, PROFILES["generic"], datetime(2025, 1, 10, 12, 20, tzinfo=timezone.utc))

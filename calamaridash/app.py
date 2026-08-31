@@ -107,7 +107,8 @@ def create_app(settings: Settings | None = None) -> Flask:
             source_status.append({"source": getattr(adapter, "source_name", adapter.__class__.__name__),
                                   "last_error": getattr(adapter, "last_error", None),
                                   "path": getattr(adapter, "api_url", getattr(adapter, "path", None))})
-        return jsonify({"status": "ok", "sources": len(runtime["adapters"]), "last_upload": state["last_upload"],
+        has_source_error = any(item["last_error"] for item in source_status)
+        return jsonify({"status": "degraded" if has_source_error else "ok", "sources": len(runtime["adapters"]), "last_upload": state["last_upload"],
                        "source_status": source_status})
 
     @app.route("/api/settings", methods=["GET", "POST"])
