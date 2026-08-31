@@ -5,7 +5,7 @@ from pathlib import Path
 from calamaridash.adif import parse_adif
 from calamaridash.adapters import PollingWatcher, WavelogAdapter
 from calamaridash.models import QSO
-from calamaridash.scoring import PROFILES, calculate
+from calamaridash.scoring import PROFILES, calculate, custom_profile
 
 
 ADIF = "<ADIF_VER:5>3.1.4<EOH><CALL:4>W1AW<QSO_DATE:8>20250110<TIME_ON:6>120000<BAND:3>20m<MODE:3>SSB<DXCC:3>291<EOR><CALL:4>K3ABC<QSO_DATE:8>20250110<TIME_ON:6>121000<BAND:3>40m<MODE:4>RTTY<DXCC:3>1<EOR>"
@@ -106,6 +106,33 @@ def test_arrl_rtty_roundup_score_deduplicates_by_call_and_band():
     assert metrics["score_exact"] is True
 
 
+def test_custom_profile_supports_points_only_and_call_duplicates():
+    profile = custom_profile({"code": "EDGE-1", "name": "Edge Case",
+                              "points_per_qso": 2, "multiplier_field": "none",
+                              "duplicate_scope": "callsign", "score_formula": "points_only"})
+    qsos = [QSO("K3ABC", datetime(2025, 1, 10, 12, 0, tzinfo=timezone.utc), band="20m", source_id="one"),
+            QSO("K3ABC", datetime(2025, 1, 10, 12, 1, tzinfo=timezone.utc), band="40m", source_id="two"),
+            QSO("N0XYZ", datetime(2025, 1, 10, 12, 2, tzinfo=timezone.utc), band="20m", source_id="three")]
+    metrics = calculate(qsos, profile)
+    assert metrics["totalQsos"] == 2
+    assert metrics["totalQsoPoints"] == 4
+    assert metrics["multiplierCount"] == 0
+    assert metrics["score"] == 4
+    assert metrics["score_exact"] is False
+
+
+def test_custom_profile_validation_rejects_unsafe_or_inconsistent_rules():
+    from pytest import raises
+    with raises(ValueError, match="points-only"):
+        custom_profile({"code": "EDGE-2", "name": "Bad", "points_per_qso": 1,
+                        "multiplier_field": "none", "duplicate_scope": "qso",
+                        "score_formula": "points_times_multipliers"})
+    with raises(ValueError, match="Unsupported score formula"):
+        custom_profile({"code": "EDGE-3", "name": "Bad", "points_per_qso": 1,
+                        "multiplier_field": "state", "duplicate_scope": "qso",
+                        "score_formula": "points * __import__('os').system('x')"})
+
+
 def test_flask_metrics_endpoint():
     from calamaridash.app import create_app
     app = create_app()
@@ -162,3 +189,25 @@ def test_contest_selector_and_session_lifecycle(tmp_path):
     assert response.status_code == 200
     assert response.json["contest"] == "CQ-WPX-SSB"
     assert response.json["profile"] == "generic"
+
+
+def test_custom_profile_api_persists_and_adds_contest(tmp_path):
+    from calamaridash.app import create_app
+    from calamaridash.config import Settings
+
+    app = create_app(Settings(settings_path=str(tmp_path / "settings.json"),
+                              session_path=str(tmp_path / "session.json")))
+    client = app.test_client()
+    rules = {"code": "EDGE-1", "name": "Edge Case Sprint", "points_per_qso": "2",
+             "multiplier_field": "state", "duplicate_scope": "callsign_band",
+             "score_formula": "points_times_multipliers"}
+    response = client.post("/api/custom-profile", json=rules)
+    assert response.status_code == 200
+    assert response.json["profile"]["points_per_qso"] == 2.0
+    assert any(contest["code"] == "EDGE-1" for contest in client.get("/api/contests").json)
+    saved = json.loads((tmp_path / "settings.json").read_text())
+    assert saved["custom_profiles"]["EDGE-1"]["multiplier_field"] == "state"
+    assert client.post("/api/settings", json={"contest": "EDGE-1"}).status_code == 200
+    assert client.get("/api/metrics").json["score_profile"] == "Custom: Edge Case Sprint"
+    invalid = client.post("/api/custom-profile", json={**rules, "multiplier_field": "none"})
+    assert invalid.status_code == 400

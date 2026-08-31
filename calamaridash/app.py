@@ -9,7 +9,7 @@ from .config import Settings
 from .contests import CONTESTS
 from .hamdash import HamDashClient
 from .session import ContestSession
-from .scoring import PROFILES, calculate
+from .scoring import PROFILES, calculate, custom_profile, validate_custom_profile
 
 
 def create_app(settings: Settings | None = None) -> Flask:
@@ -26,6 +26,13 @@ def create_app(settings: Settings | None = None) -> Flask:
         # RTTY profile from accidentally being used for a phone contest.
         if current.contest.upper() == "ARRL-RTTY":
             return PROFILES["arrl_rtty_roundup"]
+        for code, rules in (current.custom_profiles or {}).items():
+            if str(code).upper() == current.contest.upper():
+                try:
+                    if isinstance(rules, dict):
+                        return custom_profile({**rules, "code": code})
+                except (TypeError, ValueError):
+                    break
         return PROFILES["generic"]
 
     def recompute_and_upload(upload=True):
@@ -44,6 +51,12 @@ def create_app(settings: Settings | None = None) -> Flask:
         elapsed = session.elapsed_seconds() if timer_was_used else None
         metrics = calculate(state["qsos"], profile, operating_seconds=elapsed)
         last = metrics.pop("lastQso")
+        if metrics["score_exact"]:
+            score_warning = None
+        elif metrics["score_profile"].startswith("Custom:"):
+            score_warning = "Custom scoring profile; verify its rules before treating the score as official."
+        else:
+            score_warning = "Generic metrics only; official rules for this contest are not implemented."
         payload = {
             "contest": current.contest,
             "score": metrics["score"],
@@ -69,8 +82,7 @@ def create_app(settings: Settings | None = None) -> Flask:
             "lastQso": last,
         }
         state["payload"] = {**metrics, "lastQso": last, "contest": current.contest,
-                             "score_warning": None if metrics["score_exact"] else
-                             "Generic metrics only; official rules for this contest are not implemented."}
+                             "score_warning": score_warning}
         runtime["hamdash"] = HamDashClient(current.hamdash_url, current.hamdash_api_key)
         if upload and runtime["hamdash"].upload(payload):
             state["last_upload"] = datetime.now().isoformat()
@@ -111,6 +123,9 @@ def create_app(settings: Settings | None = None) -> Flask:
                                      interval=15 if name == "wavelog" else 2)
             watcher.start()
             runtime["watchers"].append(watcher)
+        with lock:
+            if not state["payload"]:
+                recompute_and_upload(upload=False)
         app.extensions["watchers"] = runtime["watchers"]
 
     configure_sources()
@@ -153,7 +168,31 @@ def create_app(settings: Settings | None = None) -> Flask:
 
     @app.get("/api/contests")
     def contests():
-        return jsonify([{"code": code, "name": name} for code, name in CONTESTS])
+        result = [{"code": code, "name": name} for code, name in CONTESTS]
+        known = {code.upper() for code, _ in CONTESTS}
+        for code, rules in (runtime["settings"].custom_profiles or {}).items():
+            if isinstance(rules, dict) and str(code).upper() not in known:
+                result.append({"code": code, "name": rules.get("name", code)})
+        return jsonify(result)
+
+    @app.post("/api/custom-profile")
+    def create_custom_profile():
+        data = request.get_json(silent=True)
+        try:
+            rules = validate_custom_profile(data)
+        except ValueError as error:
+            return jsonify({"error": str(error)}), 400
+        if rules["code"].upper() in {code.upper() for code, _ in CONTESTS}:
+            return jsonify({"error": "Built-in contest identifiers cannot be replaced."}), 409
+        try:
+            updated = runtime["settings"].with_custom_profile(rules["code"], rules)
+            updated.save()
+            runtime["settings"] = updated
+            with lock:
+                recompute_and_upload()
+        except OSError as error:
+            return jsonify({"error": f"Could not save custom scoring rules: {error}"}), 500
+        return jsonify({"profile": rules})
 
     @app.get("/api/health")
     def health():

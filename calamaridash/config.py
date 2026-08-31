@@ -1,6 +1,6 @@
 import json
 import os
-from dataclasses import asdict, dataclass, fields
+from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -25,6 +25,7 @@ class Settings:
     profile: str = os.getenv("SCORING_PROFILE", "arrl_rtty_roundup")
     settings_path: str = os.getenv("CALAMARIDASH_SETTINGS_PATH", "calamaridash-settings.json")
     session_path: str = os.getenv("CALAMARIDASH_SESSION_PATH", "calamaridash-session.json")
+    custom_profiles: dict = field(default_factory=dict)
 
     @classmethod
     def load(cls):
@@ -38,6 +39,8 @@ class Settings:
             return defaults
         allowed = {field.name for field in fields(cls)}
         values = {**asdict(defaults), **{key: value for key, value in saved.items() if key in allowed}}
+        if not isinstance(values.get("custom_profiles"), dict):
+            values["custom_profiles"] = {}
         if str(values["contest"]).upper() == "ARRL-RTTY":
             values["profile"] = "arrl_rtty_roundup"
         elif values["profile"] == "arrl_rtty_roundup":
@@ -45,7 +48,7 @@ class Settings:
         return cls(**values)
 
     def updated(self, values: dict):
-        allowed = {field.name for field in fields(self)} - {"settings_path"}
+        allowed = {field.name for field in fields(self)} - {"settings_path", "custom_profiles"}
         merged = asdict(self)
         for key in allowed:
             if key not in values:
@@ -60,8 +63,20 @@ class Settings:
             merged["profile"] = "generic"
         return Settings(**merged)
 
+    def with_custom_profile(self, code: str, profile: dict):
+        merged = asdict(self)
+        profiles = dict(self.custom_profiles or {})
+        for existing in list(profiles):
+            if str(existing).upper() == code.upper():
+                del profiles[existing]
+        profiles[code] = profile
+        merged["custom_profiles"] = profiles
+        return Settings(**merged)
+
     def save(self):
-        Path(self.settings_path).write_text(json.dumps(asdict(self), indent=2) + "\n", encoding="utf-8")
+        path = Path(self.settings_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(asdict(self), indent=2) + "\n", encoding="utf-8")
 
     def public(self) -> dict:
         data = asdict(self)
