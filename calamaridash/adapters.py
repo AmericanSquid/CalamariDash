@@ -3,6 +3,7 @@ import threading
 import urllib.request
 import urllib.error
 from datetime import datetime
+from datetime import timezone
 from urllib.parse import urlsplit, urlunsplit
 from pathlib import Path
 from typing import Callable
@@ -14,10 +15,26 @@ from .models import QSO
 class ADIFFileAdapter:
     def __init__(self, path: str, source_name: str):
         self.path, self.source_name = path, source_name
+        self.last_error = None
+        self.last_read_at = None
+        self.last_read_count = 0
 
     def read(self) -> list[QSO]:
         path = Path(self.path)
-        return parse_adif_file(path) if path.exists() else []
+        self.last_read_at = datetime.now(timezone.utc).isoformat()
+        if not path.exists():
+            self.last_error = f"Log file not found: {path}"
+            self.last_read_count = 0
+            return []
+        try:
+            qsos = parse_adif_file(path)
+            self.last_error = None
+            self.last_read_count = len(qsos)
+            return qsos
+        except Exception as error:
+            self.last_error = f"Could not read log file: {type(error).__name__}: {error}"
+            self.last_read_count = 0
+            return []
 
 
 class FLDigiAdapter(ADIFFileAdapter):
@@ -35,6 +52,8 @@ class WavelogAdapter:
     def __init__(self, url: str, api_key: str, station_id: str, state_path: str):
         self.url, self.api_key, self.station_id, self.state_path = url.rstrip("/"), api_key, station_id, Path(state_path)
         self.last_error = None
+        self.last_read_at = None
+        self.last_read_count = 0
         parts = urlsplit(self.url)
         path = parts.path.rstrip("/")
         if not path.endswith("/index.php"):
@@ -43,6 +62,7 @@ class WavelogAdapter:
 
     def read(self) -> list[QSO]:
         self.last_error = None
+        self.last_read_at = datetime.now(timezone.utc).isoformat()
         last_id = 0
         cached: dict[str, QSO] = {}
         if self.state_path.exists():
@@ -69,6 +89,7 @@ class WavelogAdapter:
             return list(cached.values())
         except Exception as error:
             self.last_error = f"Wavelog request failed: {type(error).__name__}: {error}"
+            self.last_read_count = len(cached)
             return list(cached.values())
         new_id = data.get("lastfetchedid", last_id)
         for qso in parse_adif(data.get("adif", ""), "wavelog"):
@@ -77,6 +98,7 @@ class WavelogAdapter:
             "lastfetchedid": new_id,
             "qsos": [{**qso.__dict__, "timestamp": qso.timestamp.isoformat(), "raw": {}} for qso in cached.values()],
         }))
+        self.last_read_count = len(cached)
         return list(cached.values())
 
 

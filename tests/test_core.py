@@ -70,6 +70,17 @@ def test_wavelog_adapter_reports_http_errors(tmp_path, monkeypatch):
     assert adapter.last_error.startswith("Wavelog HTTP 401")
 
 
+def test_hamdash_client_reports_http_errors(monkeypatch):
+    from urllib.error import HTTPError
+    from calamaridash.hamdash import HamDashClient
+    def fake_urlopen(request, timeout):
+        raise HTTPError(request.full_url, 400, "Bad request", {}, None)
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    client = HamDashClient("https://hamdash.example/api/standing", "secret")
+    assert client.upload({"contest": "TEST"}) is False
+    assert client.last_error.startswith("HamDash HTTP 400")
+
+
 def test_score_and_rate():
     qsos = parse_adif(ADIF, "fixture")
     metrics = calculate(qsos, PROFILES["generic"], datetime(2025, 1, 10, 12, 20, tzinfo=timezone.utc))

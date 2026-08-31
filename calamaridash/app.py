@@ -12,7 +12,7 @@ from .scoring import PROFILES, calculate
 
 def create_app(settings: Settings | None = None) -> Flask:
     app = Flask(__name__)
-    runtime = {"settings": settings or Settings.load(), "adapters": [], "watchers": []}
+    runtime = {"settings": settings or Settings.load(), "adapters": [], "watchers": [], "hamdash": None}
     state = {"source_qsos": {}, "qsos": [], "payload": {}, "last_upload": None}
     lock = Lock()
 
@@ -48,7 +48,8 @@ def create_app(settings: Settings | None = None) -> Flask:
             "lastQso": last,
         }
         state["payload"] = {**metrics, "lastQso": last, "contest": current.contest}
-        if HamDashClient(current.hamdash_url, current.hamdash_api_key).upload(payload):
+        runtime["hamdash"] = HamDashClient(current.hamdash_url, current.hamdash_api_key)
+        if runtime["hamdash"].upload(payload):
             state["last_upload"] = datetime.now().isoformat()
 
     def update_source(name, qsos, delta=False):
@@ -106,9 +107,13 @@ def create_app(settings: Settings | None = None) -> Flask:
         for adapter in runtime["adapters"]:
             source_status.append({"source": getattr(adapter, "source_name", adapter.__class__.__name__),
                                   "last_error": getattr(adapter, "last_error", None),
+                                  "last_read_at": getattr(adapter, "last_read_at", None),
+                                  "last_read_count": getattr(adapter, "last_read_count", 0),
                                   "path": getattr(adapter, "api_url", getattr(adapter, "path", None))})
         has_source_error = any(item["last_error"] for item in source_status)
-        return jsonify({"status": "degraded" if has_source_error else "ok", "sources": len(runtime["adapters"]), "last_upload": state["last_upload"],
+        hamdash_error = runtime["hamdash"].last_error if runtime["hamdash"] else None
+        return jsonify({"status": "degraded" if has_source_error or hamdash_error else "ok", "sources": len(runtime["adapters"]),
+                       "last_upload": state["last_upload"], "hamdash_error": hamdash_error,
                        "source_status": source_status})
 
     @app.route("/api/settings", methods=["GET", "POST"])
